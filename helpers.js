@@ -79,10 +79,8 @@ module.exports = {
 
     niceCapitalize(text) {
         let niceText = "";
-        try { text.split(" ").forEach((a) => { if (a instanceof String) { niceText += a[0].toUpperCase() + a.substring(1, a.length).toLowerCase() + " "; } }); }
-        finally {
-            return niceText.substring(0, niceText.length - 1);
-        }
+        text.split(" ").forEach((a) => { if (typeof a == "string" && a.length > 0) { niceText += a[0].toUpperCase() + a.substring(1, a.length).toLowerCase() + " "; } });
+        return niceText.substring(0, niceText.length - 1);
     },
 
     isLetter: (str) => {
