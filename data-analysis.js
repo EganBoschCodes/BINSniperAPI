@@ -5,23 +5,32 @@ const Helpers = require('./helpers');
 
 module.exports = {
     AH_INITIALIZED: false,
+    AH_DELAY: 0,
 
     pullAHData: async (timeStamp) => {
-        let time = Date.now();
         let ah = new AuctionHouse();
         let i = 0;
+        console.log("");
+        console.log("");
+        console.log("");
+        console.log("");
+        process.stdout.write("Progress: 0/" + ah.target);
 
         for (let i = 0; i < 100; i++) {
             getAuctionPageHTTP(ah, i, timeStamp);
         }
 
-        while (!ah.filled() && Date.now() - time < 10000) {
+        while (!ah.filled()) {
             await sleep(5);
         }
 
         ah.prune();
 
-        console.log("Time taken: " + (Date.now() - time) / 1000 + " sec")
+
+        module.exports.AH_DELAY = Date.now() - ah.lastUpdated;
+        process.stdout.write("\n");
+
+        console.log("Time taken: " + (Date.now() - ah.lastUpdated) / 1000 + " sec")
         console.log("AH DATA TIMESTAMP: " + ah.lastUpdated);
         module.exports.AH_INITIALIZED = true;
         return ah;
@@ -39,9 +48,15 @@ let getAuctionPageHTTP = async (ah, page, timeStamp) => {
 
     try {
         let response = await axios.get('https://api.hypixel.net/skyblock/auctions?page=' + page);
-        while (response.timeStamp < timeStamp) {
+        let timeStarted = Date.now();
+        while (response.timeStamp < timeStamp && (Date.now() - timeStarted < 60000)) {
             response = await axios.get('https://api.hypixel.net/skyblock/auctions?page=' + page);
-		}
+        }
+        if ((Date.now() - timeStarted) >= 60000) {
+            ah.pagesPopulated++;
+            console.log("Collect page timed out for page " + page);
+            return;
+        }
         ah.populate(response.data);
     }
     catch (e) { /*This just catches invalid pages.*/ }
@@ -60,7 +75,7 @@ let AuctionHouse = function () {
         this.lastUpdated = Math.max(this.lastUpdated, page.lastUpdated);
         for (let auction in page.auctions) {
             let name = Helpers.getName(page.auctions[auction]) + " (" + Helpers.niceCapitalize(page.auctions[auction].tier) + ")";
-            if (page.auctions[auction].bin) {
+            if (page.auctions[auction].bin && !page.auctions[auction].item_name[0].includes("[") && !page.auctions[auction].item_name.includes(" Skin")) {
                 if (this.binMap.has(name)) {
                     this.binMap.get(name).addAuction(page.auctions[auction]);
                 }
@@ -69,6 +84,9 @@ let AuctionHouse = function () {
                 }
 			}
         }
+        process.stdout.clearLine();
+        process.stdout.cursorTo(0);
+        process.stdout.write("Progress: " + (this.pagesPopulated + 1) + "/" + this.target);
         this.pagesPopulated++;
     }
 
@@ -89,6 +107,7 @@ let AuctionHouse = function () {
         });
 
         killList.forEach((a) => {
+            //console.log("DELETING: " + a);
             this.binMap.delete(a);
         });
 	}
@@ -110,6 +129,10 @@ let AuctionItem = function (tag, firstAuction) {
     }
 
     this.getAverage = () => {
+        if (this.prices.length < 7) {
+            return 10000000000;
+        }
+
         let avg = 0;
         for (let i = 1; i < 7; i++) {
             avg += this.prices[i];

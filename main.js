@@ -3,13 +3,17 @@ const Helpers = require('./helpers');
 const Backend = require('./data-analysis');
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 
 let AuctionHouseData = Backend.pullAHData(0);
 
+let lastRequestTimestamp = Date.now();
+
 
 app.get('/whitelist/username=*', async (req, res) => {
+
+    lastRequestTimestamp = Date.now();
     
     let name = Helpers.getArgument(req.originalUrl, "username")
 
@@ -27,22 +31,17 @@ app.get('/whitelist/username=*', async (req, res) => {
         }
     }
 
-    Backend.timeAHPull();
-
     res.json(response)
 
 });
 
 app.get('/gettrades/minprofit=*&profitscale=*&username=*', async (req, res) => {
 
+    lastRequestTimestamp = Date.now();
+
     let minProfit = parseFloat(Helpers.getArgument(req.originalUrl, "minprofit"));
     let profitScale = parseFloat(Helpers.getArgument(req.originalUrl, "profitscale"));
     let username = Helpers.getArgument(req.originalUrl, "username");
-
-
-    console.log(minProfit)
-    console.log(profitScale)
-    console.log(username)
 
     let response;
     if (!Helpers.isWhitelisted(username)) {
@@ -69,8 +68,8 @@ app.get('/gettrades/minprofit=*&profitscale=*&username=*', async (req, res) => {
                 goodTrades.push({
                     uuid: auction.flip.uuid,
                     price: auction.price(),
-                    avg: auction.getAverage(),
-                    profit: auction.profit(),
+                    avg: Math.round(auction.getAverage()),
+                    profit: Math.round(auction.profit()),
                     name: key
                 });
             }
@@ -89,20 +88,47 @@ app.get('/gettrades/minprofit=*&profitscale=*&username=*', async (req, res) => {
 
 });
 
+app.get('/status', async (req, res) => {
+
+    lastRequestTimestamp = Date.now();
+
+    res.json({delay: Backend.AH_DELAY})
+
+});
+
+app.get('/ping/time=*', async (req, res) => {
+
+    lastRequestTimestamp = Date.now();
+
+    let timestamp = parseFloat(Helpers.getArgument(req.originalUrl, "time"));
+    res.json({ timeSent: timestamp, timeRecieved: Date.now() })
+
+});
+
 
 let firstSelfUpdate = false;
+let firstChecking = true;
+
+let ALREADY_UPDATING = false;
+
 let updateAH = async () => {
 
-    if (Backend.AH_INITIALIZED) {
-        console.log("Checking time...");
+    if (Backend.AH_INITIALIZED && (Date.now() - lastRequestTimestamp) < 300000) {
+        if (firstChecking) {
+            console.log("Checking time...");
+            firstChecking = false;
+        }
         let timeStamp = await Backend.getAPITimeStamp();
         let dataTimestamp = (await AuctionHouseData).lastUpdated;
-        if (timeStamp > dataTimestamp) {
+        if (timeStamp > dataTimestamp && !ALREADY_UPDATING) {
+            ALREADY_UPDATING = true;
             console.log("REFRESHING AUCTION HOUSE...")
-            setTimeout(updateAH, 59100);
-            localCopy = await Backend.pullAHData(timeStamp)
-            AuctionHouseData = localCopy
-            firstSelfUpdate = true
+            setTimeout(updateAH, timeStamp + 59000 - Date.now());
+            localCopy = await Backend.pullAHData(timeStamp);
+            AuctionHouseData = localCopy;
+            firstSelfUpdate = true;
+            firstChecking = true;
+            ALREADY_UPDATING = false;
         }
         else {
             setTimeout(updateAH, firstSelfUpdate ? 500 : 5000);
@@ -116,4 +142,4 @@ let updateAH = async () => {
 
 updateAH();
 
-app.listen(port, () => console.log(`Example app listening on port ${port}!`));
+app.listen(port, () => console.log(`Skyblock API listening on port ${port}!`));

@@ -1,14 +1,17 @@
-const WHITELIST = ["BoschMods", "aurakiller65212"];
+var sha256 = require('js-sha256');
+
+const WHITELIST = ["BoschMods", "aurakiller65212", "ShinyL"];
+let WHITELIST_HASH = [];
 
 let reforgeMap = new Map();
 let reforges = ["NECROTIC", "ANCIENT", "FABLED", "GIANT", "GENTLE", "ODD", "FAST", "FAIR", "EPIC", "SHARP", "HEROIC", "SPICY", "LEGENDARY", "DIRTY", "GILDED", "WARPED", "BULKY", "SALTY", "TREACHEROUS", "STIFF", "LUCKY", "DEADLY", "FINE", "GRAND", "HASTY", "NEAT", "RAPID", "UNREAL", "AWKWARD", "RICH", "PRECISE", "HEADSTRONG", "CLEAN", "FIERCE", "HEAVY", "LIGHT", "MYTHIC", "PURE", "SMART", "TITANIC", "WISE", "PERFECT", "SPIKED", "RENOWNED", "CUBIC", "WARPED", "REINFORCED", "LOVING", "RIDICULOUS", "SUBMERGED", "JADED", "BIZARRE", "ITCHY", "OMINOUS", "PLEASANT", "PRETTY", "SHINY", "SIMPLE", "STRANGE", "VIVID", "GODLY", "DEMONIC", "FORCEFUL", "HURTFUL", "KEEN", "STRONG", "SUPERIOR", "UNPLEASANT", "ZEALOUS", "SILKY", "BLOODY", "SHADED", "SWEET", "FRUITFUL", "MAGNETIC", "REFINED", "BLESSED", "FLEET", "STELLAR", "MITHRAIC", "AUSPICIOUS", "HEATED", "AMBERED"];
 for (let reforge in reforges) {
-    reforgeMap.set(reforge, reforge);
+    reforgeMap.set(reforges[reforge], reforge);
 }
 
 module.exports = {
     isWhitelisted: (name) => {
-        return WHITELIST.includes(name);
+        return WHITELIST_HASH.includes(name);
     },
 
     getName: (input) => {
@@ -34,7 +37,7 @@ module.exports = {
 		let tag = name.toUpperCase();
 		let tagSplit = tag.split(" ");
 
-		if (reforgeMap.has(tagSplit[0])) {
+		if (reforgeMap.has(tagSplit[0].toUpperCase())) {
 			tagSplit.shift();
 		}
 
@@ -92,5 +95,13 @@ module.exports = {
         let trimmedStr = str.substring(index + arg.length + 1);
         let indexNext = trimmedStr.indexOf("&");
         return trimmedStr.substring(0, indexNext < 0 ? trimmedStr.length : indexNext);
+    },
+
+    hash(str) {
+        return sha256(str+"_verify");
     }
+}
+
+for (let i in WHITELIST) {
+    WHITELIST_HASH.push(module.exports.hash(WHITELIST[i]));
 }

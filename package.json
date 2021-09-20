@@ -1,8 +1,23 @@
 {
+  "name": "skyblock-api",
+  "version": "1.0.0",
+  "description": "Handles computation for Skyblock Mod.",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js"
+  },
+  "keywords": [
+    "Hypixel",
+    "Skyblock"
+  ],
+  "author": "Bosch",
+  "license": "ISC",
   "dependencies": {
     "axios": "^0.21.1",
     "express": "^4.17.1",
+    "js-sha256": "^0.9.0",
     "nodemon": "^2.0.12",
-    "request": "^2.88.2"
+    "request": "^2.88.2",
+    "zip-folder": "^1.0.0"
   }
 }
