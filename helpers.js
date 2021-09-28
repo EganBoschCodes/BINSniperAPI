@@ -1,6 +1,6 @@
 var sha256 = require('js-sha256');
 
-const WHITELIST = ["BoschMods", "aurakiller65212", "ShinyL"];
+const WHITELIST = ["BoschMods", "aurakiller65212", "ShinyL", "tommf", "rymflan"];
 let WHITELIST_HASH = [];
 
 let reforgeMap = new Map();
@@ -8,6 +8,8 @@ let reforges = ["NECROTIC", "ANCIENT", "FABLED", "GIANT", "GENTLE", "ODD", "FAST
 for (let reforge in reforges) {
     reforgeMap.set(reforges[reforge], reforge);
 }
+
+let PRINT_STRING = "";
 
 module.exports = {
     isWhitelisted: (name) => {
@@ -75,7 +77,7 @@ module.exports = {
          
         return -1;
     },
-
+    
     cleanRound(num, dec) {
         return Math.floor(num * Math.pow(10, dec)) / Math.pow(10, dec);
     },
@@ -99,6 +101,15 @@ module.exports = {
 
     hash(str) {
         return sha256(str+"_verify");
+    },
+
+    log(str) {
+        console.log(str);
+        PRINT_STRING += str + "\n";
+    },
+
+    getLog() {
+        return PRINT_STRING;
     }
 }
 

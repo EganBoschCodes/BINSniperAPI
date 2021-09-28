@@ -61,7 +61,9 @@ app.get('/gettrades/minprofit=*&profitscale=*&username=*', async (req, res) => {
     else {
         let goodTrades = [];
 
+        Helpers.log("Beginning AH wait...")
         let localAH = await AuctionHouseData;
+        Helpers.log("Retrieved AH")
 
         localAH.binMap.forEach((auction, key) => {
             if (auction.profit() > minProfit && auction.profit() > profitScale * Math.sqrt(auction.price())) {
@@ -92,7 +94,12 @@ app.get('/status', async (req, res) => {
 
     lastRequestTimestamp = Date.now();
 
-    res.json({delay: Backend.AH_DELAY})
+    res.json({
+        delay: Backend.AH_DELAY,
+        done: Backend.AH_PAGES_DONE,
+        needed: Backend.AH_PAGES_NEEDED,
+        log: Helpers.getLog()
+    })
 
 });
 
@@ -115,14 +122,14 @@ let updateAH = async () => {
 
     if (Backend.AH_INITIALIZED && (Date.now() - lastRequestTimestamp) < 300000) {
         if (firstChecking) {
-            console.log("Checking time...");
+            Helpers.log("Checking time...");
             firstChecking = false;
         }
         let timeStamp = await Backend.getAPITimeStamp();
         let dataTimestamp = (await AuctionHouseData).lastUpdated;
         if (timeStamp > dataTimestamp && !ALREADY_UPDATING) {
             ALREADY_UPDATING = true;
-            console.log("REFRESHING AUCTION HOUSE...")
+            Helpers.log("REFRESHING AUCTION HOUSE...")
             setTimeout(updateAH, timeStamp + 59000 - Date.now());
             localCopy = await Backend.pullAHData(timeStamp);
             AuctionHouseData = localCopy;
@@ -142,4 +149,4 @@ let updateAH = async () => {
 
 updateAH();
 
-app.listen(port, () => console.log(`Skyblock API listening on port ${port}!`));
+app.listen(port, () => Helpers.log(`Skyblock API listening on port ${port}!`));

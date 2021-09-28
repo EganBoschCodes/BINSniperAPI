@@ -6,14 +6,19 @@ const Helpers = require('./helpers');
 module.exports = {
     AH_INITIALIZED: false,
     AH_DELAY: 0,
+    AH_PAGES_DONE: 0,
+    AH_PAGES_NEEDED: 1000,
 
     pullAHData: async (timeStamp) => {
+        Helpers.log("Starting AH Pull...");
+        module.exports.AH_PAGES_DONE = 0;
+        module.exports.AH_PAGES_NEEDED = 1000;
         let ah = new AuctionHouse();
         let i = 0;
-        console.log("");
-        console.log("");
-        console.log("");
-        console.log("");
+        Helpers.log("");
+        Helpers.log("");
+        Helpers.log("");
+        Helpers.log("");
         process.stdout.write("Progress: 0/" + ah.target);
 
         for (let i = 0; i < 100; i++) {
@@ -30,8 +35,8 @@ module.exports = {
         module.exports.AH_DELAY = Date.now() - ah.lastUpdated;
         process.stdout.write("\n");
 
-        console.log("Time taken: " + (Date.now() - ah.lastUpdated) / 1000 + " sec")
-        console.log("AH DATA TIMESTAMP: " + ah.lastUpdated);
+        Helpers.log("Time taken: " + (Date.now() - ah.lastUpdated) / 1000 + " sec")
+        Helpers.log("AH DATA TIMESTAMP: " + ah.lastUpdated);
         module.exports.AH_INITIALIZED = true;
         return ah;
     },
@@ -48,18 +53,29 @@ let getAuctionPageHTTP = async (ah, page, timeStamp) => {
 
     try {
         let response = await axios.get('https://api.hypixel.net/skyblock/auctions?page=' + page);
-        let timeStarted = Date.now();
-        while (response.timeStamp < timeStamp && (Date.now() - timeStarted < 60000)) {
-            response = await axios.get('https://api.hypixel.net/skyblock/auctions?page=' + page);
-        }
-        if ((Date.now() - timeStarted) >= 60000) {
-            ah.pagesPopulated++;
-            console.log("Collect page timed out for page " + page);
+        if (!response.data.success) {
+            Helpers.log(response.data);
+            Helpers.log("PAGE " + page + " DOESN'T EXIST");
             return;
+        }
+        let timeStarted = Date.now();
+        while (response.data.timeStamp < timeStamp && (Date.now() - timeStarted < 60000)) {
+            ah.target = Math.min(ah.target, response.data.totalPages);
+            module.exports.AH_PAGES_DONE = ah.pagesPopulated + 1;
+            module.exports.AH_PAGES_NEEDED = ah.target;
+            response = await axios.get('https://api.hypixel.net/skyblock/auctions?page=' + page);
+            if (!response.data.success) {
+                Helpers.log(response.data);
+                Helpers.log("PAGE " + page + " DOESN'T EXIST");
+                return;
+            }
         }
         ah.populate(response.data);
     }
-    catch (e) { /*This just catches invalid pages.*/ }
+    catch (e) {
+        /*This just catches invalid pages.*/
+        Helpers.log("PAGE "+page+" IS INVALID");
+    }
 
 }
 
@@ -86,6 +102,8 @@ let AuctionHouse = function () {
         }
         process.stdout.clearLine();
         process.stdout.cursorTo(0);
+        module.exports.AH_PAGES_DONE = this.pagesPopulated + 1;
+        module.exports.AH_PAGES_NEEDED = this.target;
         process.stdout.write("Progress: " + (this.pagesPopulated + 1) + "/" + this.target);
         this.pagesPopulated++;
     }
@@ -107,12 +125,12 @@ let AuctionHouse = function () {
         });
 
         killList.forEach((a) => {
-            //console.log("DELETING: " + a);
+            //Helpers.log("DELETING: " + a);
             this.binMap.delete(a);
         });
 	}
 
-    this.filled = () => { return this.pagesPopulated >= this.target; }
+    this.filled = () => { return this.pagesPopulated >= this.target - 1; }
 }
 
 let AuctionItem = function (tag, firstAuction) {
