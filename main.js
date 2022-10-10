@@ -37,6 +37,8 @@ app.get('/whitelist/username=*', async (req, res) => {
 
 app.get('/gettrades/minprofit=*&profitscale=*&username=*', async (req, res) => {
 
+    useLastAuctionHouse = (Date.now() - lastRequestTimestamp) < 300000;
+
     lastRequestTimestamp = Date.now();
 
     let minProfit = parseFloat(Helpers.getArgument(req.originalUrl, "minprofit"));
@@ -61,27 +63,56 @@ app.get('/gettrades/minprofit=*&profitscale=*&username=*', async (req, res) => {
     else {
         let goodTrades = [];
 
-        Helpers.log("Beginning AH wait...")
         let localAH = await AuctionHouseData;
-        Helpers.log("Retrieved AH")
 
-        localAH.binMap.forEach((auction, key) => {
-            if (auction.profit() > minProfit && auction.profit() > profitScale * Math.sqrt(auction.price())) {
-                goodTrades.push({
-                    uuid: auction.flip.uuid,
-                    price: auction.price(),
-                    avg: Math.round(auction.getAverage()),
-                    profit: Math.round(auction.profit()),
-                    name: key
-                });
-            }
-        })
+        if(Backend.FULLY_REFRESHED) {
+
+            localAH.binMap.forEach((auction, key) => {
+                if (auction.profit() > minProfit && auction.profit() > profitScale * Math.sqrt(auction.price())) {
+                    goodTrades.push({
+                        uuid: auction.flip.uuid,
+                        price: auction.price(),
+                        avg: Math.round(auction.getAverage()),
+                        profit: Math.round(auction.profit()),
+                        name: key
+                    });
+                }
+            })
+
+        }
+        else if (useLastAuctionHouse) {
+            console.log()
+            console.log(Backend.potential_early_trades.length+"\n\n\n");
+            console.log()
+
+            Backend.potential_early_trades.forEach((auction) => {
+                const name = Helpers.getName(auction) + " (" + Helpers.niceCapitalize(auction.tier) + ")";
+                const persistent_data = AuctionHouseData.tradeMap.get(name);
+                const profit = Math.round(0.98 * persistent_data.prices[1] - auction.starting_bid);
+
+                console.log(name);
+                console.log(profit);
+                console.log(profit/ Math.sqrt(auction.starting_bid));
+
+                if (profit > minProfit && profit > profitScale * Math.sqrt(auction.starting_bid)) {
+                    goodTrades.push({
+                        uuid: auction.uuid,
+                        price: auction.starting_bid,
+                        avg: Math.round(persistent_data.getAverage()),
+                        profit: Math.round(0.98 * persistent_data.prices[1] - auction.starting_bid),
+                        name: name
+                    });
+                }
+            })
+
+        }
 
         goodTrades.sort((a, b) => { return b.profit - a.profit; });
 
         response = {
             status: 200,
             timestamp: localAH.lastUpdated,
+            fully_parsed: Backend.FULLY_REFRESHED,
             trades: goodTrades
         }
     }
@@ -112,6 +143,39 @@ app.get('/ping/time=*', async (req, res) => {
 
 });
 
+app.get("/price/name=*&timescale=*", async (req, res) => {
+
+    lastRequestTimestamp = Date.now();
+
+    let results = Backend.PRICE_TRACKER.search(Helpers.getArgument(req.originalUrl, "name").replaceAll("_", " "));
+
+    let data = [];
+    let time_matches = (["hour", "day", "week"].filter((a) => a.includes(Helpers.getArgument(req.originalUrl, "timescale"))));
+    let time_scale = time_matches.length > 0 ? time_matches[0] : "hour";
+    
+    if(time_scale.includes("hour")) {
+        results.forEach((tag) => {
+            data.push(Backend.PRICE_TRACKER.items.get(tag).summarize_hour());
+        });
+    }
+    else if(time_scale.includes("day")) {
+        results.forEach((tag) => {
+            data.push(Backend.PRICE_TRACKER.items.get(tag).summarize_day());
+        });
+    }
+    else {
+        results.forEach((tag) => {
+            data.push(Backend.PRICE_TRACKER.items.get(tag).summarize_week());
+        });
+    }
+
+    res.json({
+        results: results,
+        data: data
+    })
+
+});
+
 
 let firstSelfUpdate = false;
 let firstChecking = true;
@@ -120,18 +184,23 @@ let ALREADY_UPDATING = false;
 
 let updateAH = async () => {
 
-    if (Backend.AH_INITIALIZED && (Date.now() - lastRequestTimestamp) < 300000) {
+
+    if (Backend.AH_INITIALIZED) {
         if (firstChecking) {
             Helpers.log("Checking time...");
             firstChecking = false;
         }
         let timeStamp = await Backend.getAPITimeStamp();
         let dataTimestamp = (await AuctionHouseData).lastUpdated;
+
         if (timeStamp > dataTimestamp && !ALREADY_UPDATING) {
             ALREADY_UPDATING = true;
             Helpers.log("REFRESHING AUCTION HOUSE...")
             setTimeout(updateAH, timeStamp + 59000 - Date.now());
-            localCopy = await Backend.pullAHData(timeStamp);
+
+            localCopy = await Backend.pullAHData(timeStamp, AuctionHouseData);
+            Backend.PRICE_TRACKER.update(localCopy);
+
             AuctionHouseData = localCopy;
             firstSelfUpdate = true;
             firstChecking = true;
